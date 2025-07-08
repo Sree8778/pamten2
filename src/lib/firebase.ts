@@ -8,10 +8,10 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'fire
 declare const __app_id: string | undefined;
 declare const __initial_auth_token: string | undefined;
 
-let firebaseAppInstance;
-let authInstance;
-let dbInstance;
-let storageInstance; // NEW: Storage instance
+let firebaseAppInstance: any;
+let authInstance: any;
+let dbInstance: any;
+let storageInstance: any; // NEW: Storage instance
 
 let isFirebaseInitialized = false;
 
@@ -27,7 +27,7 @@ const firebaseConfig = {
 };
 
 // Function to initialize Firebase and handle initial authentication
-const initializeFirebase = async () => {
+export const initializeFirebase = async () => { // Exported for external use
     if (isFirebaseInitialized) {
         return { app: firebaseAppInstance, authInstance: authInstance, dbInstance: dbInstance, storageInstance: storageInstance };
     }
@@ -86,11 +86,12 @@ const initializeFirebase = async () => {
 export const getFirebaseAuth = () => authInstance;
 export const getFirebaseDb = () => dbInstance;
 export const getFirebaseStorage = () => storageInstance; // NEW: Export getFirebaseStorage
-export const initFirebase = initializeFirebase;
+export const initFirebase = initializeFirebase; // Renamed export for consistency
 
 // Helper to get current user ID or generate a random one for unauthenticated users
 export const getCurrentUserId = (user: FirebaseUser | null): string => {
-    const appId = firebaseConfig.projectId; 
+    // Use __app_id if available, otherwise fallback to firebaseConfig.projectId
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
     return user?.uid || `${appId}-anon-${crypto.randomUUID()}`;
 };
 
@@ -106,7 +107,7 @@ export const saveUserProfile = async (userId: string, profileData: any) => {
         return;
     }
 
-    const appId = firebaseConfig.projectId;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
     const userProfileRef = doc(dbInstance, `artifacts/${appId}/users/${userId}/profiles`, 'userProfile');
 
     try {
@@ -125,7 +126,7 @@ export const getUserProfile = async (userId: string) => {
         return null;
     }
 
-    const appId = firebaseConfig.projectId;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
     const userProfileRef = doc(dbInstance, `artifacts/${appId}/users/${userId}/profiles`, 'userProfile');
 
     try {
@@ -149,7 +150,7 @@ const getJobsCollectionRef = () => {
         console.error("Firestore database instance is null. Cannot get jobs collection reference.");
         throw new Error("Firestore database not initialized.");
     }
-    const appId = firebaseConfig.projectId;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
     return collection(dbInstance, `artifacts/${appId}/public/data/jobs`);
 };
 
@@ -169,7 +170,7 @@ export const addJob = async (jobData: any) => {
         return { id: docRef.id, ...jobData, status: jobData.status || 'Draft' };
     } catch (error) {
         console.error("Error adding job: ", error);
-        throw new Error("Failed to add job.");
+        throw new Error(`Failed to add job: ${error.message}`); // Enhanced error message
     }
 };
 
@@ -187,7 +188,7 @@ export const getJob = async (jobId: string) => {
         return null;
     } catch (error) {
         console.error("Error getting job: ", error);
-        throw new Error("Failed to retrieve job.");
+        throw new Error(`Failed to retrieve job: ${error.message}`); // Enhanced error message
     }
 };
 
@@ -203,7 +204,7 @@ export const updateJob = async (jobId: string, updatedData: any) => {
         return { id: jobId, ...updatedData, status: updatedData.status || 'Draft' };
     } catch (error) {
         console.error("Error updating job: ", error);
-        throw new Error("Failed to update job.");
+        throw new Error(`Failed to update job: ${error.message}`); // Enhanced error message
     }
 };
 
@@ -218,7 +219,7 @@ export const deleteJob = async (jobId: string) => {
         console.log("Job deleted successfully: ", jobId, " from collection: ", jobDocRef.path);
     } catch (error) {
         console.error("Error deleting job: ", error);
-        throw new Error("Failed to delete job.");
+        throw new Error(`Failed to delete job: ${error.message}`); // Enhanced error message
     }
 };
 
@@ -229,16 +230,16 @@ export const getAllJobsForRecruiter = async (recruiterId: string) => {
         throw new Error("Firestore database not initialized.");
     }
     try {
-        const jobsCollectionRef = getJobsCollectionRef(); 
+        const jobsCollectionRef = getJobsCollectionRef();
         const q = query(jobsCollectionRef, where("recruiterId", "==", recruiterId), orderBy("postedAt", "asc"));
         const querySnapshot = await getDocs(q);
         const jobs: any[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
+
         console.log(`Retrieved ${jobs.length} total jobs for recruiter ${recruiterId} from public collection.`);
         return jobs;
     } catch (error) {
         console.error("Error getting all jobs for recruiter: ", error);
-        throw new Error("Failed to retrieve jobs for recruiter.");
+        throw new Error(`Failed to retrieve jobs for recruiter: ${error.message}`); // Enhanced error message
     }
 };
 
@@ -256,11 +257,67 @@ export const getAllPublicJobs = async () => {
         return jobs;
     } catch (error) {
         console.error("Error getting all public jobs: ", error);
-        throw new Error("Failed to retrieve public jobs.");
+        throw new Error(`Failed to retrieve public jobs: ${error.message}`); // Enhanced error message
     }
 };
 
 // --- NEW: Firestore Functions for Applications ---
+export const addJobApplication = async (applicationData: any) => {
+    if (!dbInstance) {
+        console.error("Firestore database instance is null. Cannot add job application.");
+        throw new Error("Firestore database not initialized.");
+    }
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+        // Applications are stored per user in their private collection
+        const applicationsCollectionRef = collection(dbInstance, `artifacts/${appId}/users/${applicationData.applicantId}/applications`);
+        const docRef = await addDoc(applicationsCollectionRef, applicationData);
+        console.log("Job application added with ID: ", docRef.id, " to collection: ", applicationsCollectionRef.path);
+        return { id: docRef.id, ...applicationData };
+    } catch (error) {
+        console.error("Error adding job application: ", error);
+        throw new Error(`Failed to add job application: ${error.message}`);
+    }
+};
+
+export const updateJobApplication = async (applicantId: string, applicationId: string, updatedData: any) => {
+    if (!dbInstance) {
+        console.error("Firestore database instance is null. Cannot update job application.");
+        throw new Error("Firestore database not initialized.");
+    }
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+        const applicationDocRef = doc(dbInstance, `artifacts/${appId}/users/${applicantId}/applications`, applicationId);
+        await updateDoc(applicationDocRef, updatedData);
+        console.log("Job application updated successfully: ", applicationId);
+        return { id: applicationId, ...updatedData };
+    } catch (error) {
+        console.error("Error updating job application: ", error);
+        throw new Error(`Failed to update job application: ${error.message}`);
+    }
+};
+
+export const getJobApplicationByJobAndApplicant = async (jobId: string, applicantId: string) => {
+    if (!dbInstance) {
+        console.error("Firestore database instance is null. Cannot get job application.");
+        throw new Error("Firestore database not initialized.");
+    }
+    try {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : firebaseConfig.projectId;
+        const applicationsCollectionRef = collection(dbInstance, `artifacts/${appId}/users/${applicantId}/applications`);
+        const q = query(applicationsCollectionRef, where("jobId", "==", jobId));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting job application by job and applicant: ", error);
+        throw new Error(`Failed to retrieve job application: ${error.message}`);
+    }
+};
+
+
 export const getAllApplicationsForRecruiter = async (recruiterId: string) => {
     if (!dbInstance) {
         console.error("Firestore database instance is null. Cannot get applications for recruiter.");
@@ -281,27 +338,28 @@ export const getAllApplicationsForRecruiter = async (recruiterId: string) => {
         // Step 2: Query applications collection group where jobId is one of the recruiter's job IDs
         // Firestore 'in' query operator has a limit of 10 items.
         // If a recruiter has more than 10 jobs, this needs to be split into multiple queries.
-        if (recruiterJobIds.length > 10) {
-            console.warn("Recruiter has more than 10 jobs. 'in' query limited to first 10 jobIds.");
-            // Implement batching or a Cloud Function for larger sets if needed.
+        let allApplications: any[] = [];
+        const batchSize = 10;
+        for (let i = 0; i < recruiterJobIds.length; i += batchSize) {
+            const batchJobIds = recruiterJobIds.slice(i, i + batchSize);
+            const applicationsCollectionGroupRef = collectionGroup(dbInstance, 'applications'); // Correctly calls collectionGroup
+            const qApplications = query(
+                applicationsCollectionGroupRef,
+                where('jobId', 'in', batchJobIds),
+                orderBy('submittedAt', 'desc') // Order by latest submission
+            );
+            const appSnapshot = await getDocs(qApplications);
+            appSnapshot.docs.forEach(doc => {
+                allApplications.push({ id: doc.id, ...doc.data() });
+            });
         }
-        
-        const applicationsCollectionGroupRef = collectionGroup(dbInstance, 'applications'); // Correctly calls collectionGroup
-        const qApplications = query(
-            applicationsCollectionGroupRef,
-            where('jobId', 'in', recruiterJobIds.slice(0, 10)), // Limit to 10 for 'in' operator
-            orderBy('submittedAt', 'desc') // Order by latest submission
-        );
-        
-        const appSnapshot = await getDocs(qApplications);
-        const fetchedApplications: any[] = appSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        console.log(`Retrieved ${fetchedApplications.length} applications for recruiter ${recruiterId}.`);
-        return fetchedApplications;
+
+        console.log(`Retrieved ${allApplications.length} applications for recruiter ${recruiterId}.`);
+        return allApplications;
 
     } catch (error) {
         console.error("Error getting all applications for recruiter: ", error);
-        throw new Error("Failed to retrieve applications for recruiter.");
+        throw new Error(`Failed to retrieve applications for recruiter: ${error.message}`);
     }
 };
 
@@ -319,7 +377,7 @@ export const uploadFileToStorage = async (file: File | Blob, path: string): Prom
         return downloadURL;
     } catch (error) {
         console.error("Error uploading file to storage:", error);
-        throw new Error("Failed to upload file to storage.");
+        throw new Error(`Failed to upload file to storage: ${error.message}`);
     }
 };
 
@@ -334,7 +392,7 @@ export const deleteFileFromStorage = async (url: string): Promise<void> => {
         console.log(`File deleted from storage: ${url}`);
     } catch (error) {
         console.error("Error deleting file from storage:", error);
-        throw new Error("Failed to delete file from storage.");
+        throw new Error(`Failed to delete file from storage: ${error.message}`);
     }
 };
 
@@ -346,11 +404,12 @@ export const updateApplicationStatus = async (applicantId: string, appId: string
     }
     try {
         // Correct path for application document: artifacts/{appId}/users/{applicantId}/applications/{applicationId}
-        const applicationDocRef = doc(dbInstance, `artifacts/${appId}/users/${applicantId}/applications/${appId}`); // Fix: Use appId as the document ID here
+        const applicationDocRef = doc(dbInstance, `artifacts/${getAppId()}/users/${applicantId}/applications/${appId}`); // Fix: Use appId as the document ID here
         await updateDoc(applicationDocRef, { status: newStatus });
         console.log(`Application ${appId} status updated to ${newStatus}.`);
     } catch (error) {
         console.error("Error updating application status:", error);
-        throw new Error("Failed to update application status.");
+        throw new Error(`Failed to update application status: ${error.message}`);
     }
 };
+

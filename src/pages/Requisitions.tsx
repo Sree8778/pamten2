@@ -1,31 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '@/components/layout/Layout';
-import JobEditor from '@/components/requisition/JobEditor';
-import FloatingButton from '@/components/FloatingButton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { 
-  Pencil, 
-  Trash2, 
-  PlusCircle, 
-  CheckCircle, 
-  ClipboardList, 
-  Search, 
-  Loader2, 
-  Building, 
-  MapPin, 
+import Layout from '../components/layout/Layout'; // Fixed import path
+import JobEditor from '../components/requisition/JobEditor'; // Fixed import path
+import FloatingButton from '../components/FloatingButton'; // Fixed import path
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import {
+  Pencil,
+  Trash2,
+  PlusCircle,
+  CheckCircle,
+  ClipboardList,
+  Search,
+  Loader2,
+  Building,
+  MapPin,
   ShieldAlert,
-  DollarSign, 
-  CalendarIcon 
-} from 'lucide-react'; 
+  DollarSign,
+  CalendarIcon,
+  Users // Added Users icon for View Applicants button
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-import { useUserRole } from '@/contexts/UserRoleContext';
-import { getFirebaseAuth, getCurrentUserId, getAllJobsForRecruiter, deleteJob } from '@/lib/firebase';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import { useUserRole } from '../contexts/UserRoleContext'; // Fixed import path
+import { getFirebaseAuth, getCurrentUserId, getAllJobsForRecruiter, deleteJob } from '../lib/firebase'; // Fixed import path
+import { Input } from '../components/ui/input';
+import { Select } from '../components/ui/select';
+import { Label } from '../components/ui/label';
 
 // For Date Formatting
 import { format } from 'date-fns';
@@ -48,13 +50,14 @@ interface Job {
 
 const Requisitions = () => {
   const { userRole, isLoadingRole } = useUserRole();
+  const navigate = useNavigate(); // Initialize navigate hook
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'All' | 'Draft' | 'Published'>('All');
-  const [refreshKey, setRefreshKey] = useState(0); // NEW: State to force Layout re-render
+  const [refreshKey, setRefreshKey] = useState(0); // State to force Layout re-render
 
 
   const auth = getFirebaseAuth();
@@ -87,14 +90,14 @@ const Requisitions = () => {
     setIsEditorOpen(true);
   };
 
-  const handleDeleteJob = async (jobId: string, jobStatus: 'Draft' | 'Published') => {
+  const handleDeleteJob = async (jobId: string) => { // Removed jobStatus and recruiterId from params as they are not used in firebase.ts deleteJob
     if (!recruiterId) {
       toast.error("Authentication required to delete job.");
       return;
     }
     if (window.confirm("Are you sure you want to delete this job requisition? This action cannot be undone.")) {
       try {
-        await deleteJob(jobId, jobStatus, recruiterId);
+        await deleteJob(jobId); // Call deleteJob with only jobId
         toast.success("Job deleted successfully!");
         setRefreshKey(prev => prev + 1); // Increment key to force refresh
       }
@@ -116,10 +119,13 @@ const Requisitions = () => {
   };
 
   const handleCreateNewJob = () => {
-    console.log("Requisitions: 'Post New Job' button clicked."); // NEW DEBUG LOG
     setEditingJob(null);
-    setIsEditorOpen(true); // This should open the Dialog
-    console.log("Requisitions: isEditorOpen set to true."); // NEW DEBUG LOG
+    setIsEditorOpen(true);
+  };
+
+  // NEW: Function to navigate to Candidates page with jobId
+  const handleViewApplicants = (jobId: string) => {
+    navigate(`/candidates`, { state: { jobId: jobId } });
   };
 
   // Filtered jobs based on search query and status
@@ -133,7 +139,7 @@ const Requisitions = () => {
 
   if (isLoadingRole || loadingJobs) {
     return (
-      <Layout key={refreshKey}> {/* Apply key to Layout */}
+      <Layout key={refreshKey}>
         <div className="flex flex-col items-center justify-center min-h-[500px] bg-gray-50 rounded-xl shadow-lg">
           <Loader2 className="h-16 w-16 text-gray-700 animate-spin" />
           <p className="text-xl text-gray-700 mt-4">Loading your job requisitions...</p>
@@ -144,7 +150,7 @@ const Requisitions = () => {
 
   if (userRole !== 'recruiter' && userRole !== 'admin') {
     return (
-      <Layout key={refreshKey}> {/* Apply key to Layout */}
+      <Layout key={refreshKey}>
         <div className="flex flex-col items-center justify-center min-h-[500px] bg-red-50 rounded-xl shadow-lg border border-red-200 p-8">
           <ShieldAlert className="h-20 w-20 text-red-500 mb-6" />
           <h2 className="text-3xl font-bold text-red-700 mb-4">Access Denied</h2>
@@ -157,7 +163,7 @@ const Requisitions = () => {
   }
 
   return (
-    <Layout key={refreshKey}> {/* Apply key to Layout */}
+    <Layout key={refreshKey}>
       <div className="mt-16 mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Job Requisitions</h1>
@@ -167,20 +173,20 @@ const Requisitions = () => {
           <PlusCircle size={20} className="mr-2" /> Post New Job
         </Button>
       </div>
-      
+
       {/* Search and Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="relative flex-grow w-full sm:w-auto">
-          <Input 
-            type="text" 
-            placeholder="Search by title, company, or location..." 
+          <Input
+            type="text"
+            placeholder="Search by title, company, or location..."
             className="pl-10 pr-4 py-2 w-full rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-400"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
         </div>
-        <Select 
+        <Select
           className="w-full sm:w-48 rounded-md border border-gray-300 focus:ring-2 focus:ring-blue-400"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as 'All' | 'Draft' | 'Published')}
@@ -194,7 +200,7 @@ const Requisitions = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredJobs.length === 0 ? (
           <div className="col-span-full text-center py-10 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">
-            <ClipboardList size={48} className="mx-auto mb-4 text-gray-400" />
+            <ClipboardList size={48} className="mx-auto mb-4" />
             <p className="text-xl font-medium">No requisitions found.</p>
             <p className="text-sm mt-2">Try adjusting your search or filters, or post a new job!</p>
           </div>
@@ -210,14 +216,14 @@ const Requisitions = () => {
                     {job.status}
                   </span>
                 </CardTitle>
-                <div className="text-sm text-gray-600 flex items-center gap-2">
+                <CardDescription className="text-sm text-gray-600 flex items-center gap-2">
                   <Building size={14} className="text-gray-400" /> {job.companyName || 'N/A'}
                   <MapPin size={14} className="text-gray-400" /> {job.location}
-                </div>
+                </CardDescription>
               </CardHeader>
               <CardContent className="pt-0">
                 <p className="text-sm text-gray-700 mb-3 line-clamp-3" dangerouslySetInnerHTML={{ __html: job.description }}></p>
-                
+
                 {/* Display Skills */}
                 {job.skills && (
                   <div className="mb-2">
@@ -241,10 +247,14 @@ const Requisitions = () => {
                 )}
 
                 <div className="flex justify-end space-x-2 mt-4">
+                  {/* NEW: View Applicants Button */}
+                  <Button variant="secondary" size="sm" className="flex items-center gap-1" onClick={() => handleViewApplicants(job.id)}>
+                    <Users size={15} /> Applicants
+                  </Button>
                   <Button variant="outline" size="sm" className="flex items-center gap-1" onClick={() => handleEditJob(job)}>
                     <Pencil size={15} /> Edit
                   </Button>
-                  <Button variant="destructive" size="sm" className="flex items-center gap-1" onClick={() => handleDeleteJob(job.id, job.status)}>
+                  <Button variant="destructive" size="sm" className="flex items-center gap-1" onClick={() => handleDeleteJob(job.id)}>
                     <Trash2 size={15} /> Delete
                   </Button>
                 </div>
@@ -255,7 +265,7 @@ const Requisitions = () => {
       </div>
 
       <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
-        <DialogContent className="sm:max-w-[900px] p-6 max-h-full overflow-y-auto"> {/* Added max-h-full and overflow-y-auto */}
+        <DialogContent className="sm:max-w-[900px] p-6 max-h-full overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">{editingJob ? 'Edit Job Requisition' : 'Post New Job Requisition'}</DialogTitle>
             <DialogDescription className="text-md text-gray-600">
